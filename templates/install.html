@@ -3,50 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <title>EtherDesk Installer</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f1f5f9; padding: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { border-bottom: 2px solid #334155; padding-bottom: 20px; }
-        .card { background: #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
-        .label { color: #94a3b8; font-size: 0.9em; text-transform: uppercase; margin-bottom: 5px; }
-        .value { font-family: 'JetBrains Mono', monospace; font-size: 1.1em; color: #3b82f6; margin-bottom: 15px; }
-        .btn { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
-        .btn:hover { background: #2563eb; }
-        code { background: #000; padding: 2px 5px; border-radius: 3px; font-family: 'JetBrains Mono'; }
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f1f5f9; display: flex; justify-content: center; padding-top: 50px; }
+        .card { background: #1e293b; width: 600px; padding: 30px; border-radius: 12px; border: 1px solid #334155; }
+        h1 { margin-top: 0; border-bottom: 2px solid #334155; padding-bottom: 15px; }
+        .step { display: none; } .step.active { display: block; }
+        .btn { display: block; width: 100%; padding: 15px; margin-top: 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color:white; font-size: 1.1em; }
+        .btn-primary { background: #3b82f6; } .btn-wa { background: #25D366; } .btn-sms { background: #4285F4; } .btn-success { background: #10b981; text-decoration: none; text-align: center; box-sizing: border-box; }
+        .qr-container { text-align: center; margin-top: 20px; min-height: 250px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 8px; }
+        .qr-img { max-width: 250px; border: 5px solid white; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🛠️ EtherDesk Provisioning</h1>
-        
-        <div class="card">
-            <h2>1. Branding Configuratie</h2>
-            <div class="label">Studio Naam (STUDIO_NAME)</div>
-            <div class="value">{{ studio_name }}</div>
-            
-            <div class="label">Matrix Server</div>
-            <div class="value">{{ matrix_url }}</div>
-
-            <div class="label">Bot User</div>
-            <div class="value">{{ matrix_user }}</div>
-        </div>
-
-        <div class="card">
-            <h2>2. WhatsApp Koppelen</h2>
-            <p>Om te koppelen, open je Element/Matrix en stuur je <code>login</code> naar de bot.</p>
-            <div style="background:black; width:150px; height:150px; display:flex; align-items:center; justify-content:center; border:2px dashed #444; color:#666;">
-                [ QR PLAATSHOUDER ]
-            </div>
-            <br>
-            <a href="http://{{ matrix_url.split('//')[1].split(':')[0] }}:8009" target="_blank" class="btn">Open Element Web om te koppelen</a>
-        </div>
-
-        <div class="card">
-            <h2>3. Afronden</h2>
-            <p>Als alles correct is ingesteld, klik hieronder om naar de studio te gaan.</p>
-            <a href="/" class="btn">Naar Studio Dashboard 🚀</a>
-        </div>
+<div class="card">
+    <h1>🚀 EtherDesk Setup</h1>
+    <div id="step1" class="step">
+        <p>Welkom bij {{ studio_name }}. Systeem niet geactiveerd.</p>
+        <button class="btn btn-primary" onclick="startProvisioning()">⚡ Start Auto-Configuratie</button>
+        <div id="console" style="margin-top:10px; font-family:monospace; color:#94a3b8; display:none;">Bezig...</div>
     </div>
+    <div id="step2" class="step">
+        <p>Systeem Actief! Koppel kanalen:</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <button class="btn btn-wa" onclick="reqQr('whatsapp')">WhatsApp</button>
+            <button class="btn btn-sms" onclick="reqQr('gmessages')">SMS</button>
+        </div>
+        <div class="qr-container"><span id="qr-ph">Kies een kanaal...</span><img id="qr-img" class="qr-img" style="display:none"></div>
+        <a href="/" class="btn btn-success">✅ Naar Dashboard</a>
+    </div>
+</div>
+<script>
+    fetch('/api/stats').then(r => { if(r.ok) { document.getElementById('step2').classList.add('active'); } else { document.getElementById('step1').classList.add('active'); } });
+    function startProvisioning() {
+        document.getElementById('console').style.display='block';
+        fetch('/api/provision/auto_setup', {method: 'POST'}).then(r=>r.json()).then(d=>{
+            if(d.status==='success') { 
+                fetch('/api/provision/restart', {method:'POST'}); 
+                setTimeout(()=>{location.reload()}, 15000); 
+            } else alert("Fout: "+d.message);
+        });
+    }
+    let poll;
+    function reqQr(b) {
+        document.getElementById('qr-ph').innerText="Laden..."; document.getElementById('qr-img').style.display='none';
+        fetch(`/api/bridge/${b}/login`, {method:'POST'});
+        if(poll) clearInterval(poll);
+        poll = setInterval(()=>{
+            fetch(`/api/bridge/${b}/qr`).then(r=>r.json()).then(d=>{
+                if(d.found) { document.getElementById('qr-ph').style.display='none'; document.getElementById('qr-img').src=d.url; document.getElementById('qr-img').style.display='block'; }
+            });
+        }, 2000);
+    }
+</script>
 </body>
 </html>
