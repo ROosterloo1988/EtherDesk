@@ -68,25 +68,39 @@ docker compose up -d --force-recreate dashboard
 EtherDesk gebruikt interne bridges om te verbinden met WhatsApp en SMS.
 
 WhatsApp Koppelen
-Open Element (of een andere Matrix client) op je PC.
-
-Verbind met je eigen server: http://<IP-VAN-JE-SERVER>:8008.
-
-Start een chat met: @whatsappbot:my.local.matrix.
-
-Stuur het bericht: login.
-
-Scan de QR-code die verschijnt met de WhatsApp App op je studio-telefoon (Menu > Gekoppelde apparaten).
+1. Open Element (of een andere Matrix client) op je PC.
+2. Verbind met je eigen server: http://<IP-VAN-JE-SERVER>:8008.
+3. Start een chat met: @whatsappbot:my.local.matrix.
+4. Stuur het bericht: login.
+5. Scan de QR-code die verschijnt met de WhatsApp App op je studio-telefoon (Menu > Gekoppelde apparaten).
 
 SMS Koppelen (Via Android)
-Zorg dat de Google Messages app op de studio-telefoon staat ingesteld als standaard SMS app.
+1. Zorg dat de Google Messages app op de studio-telefoon staat ingesteld als standaard SMS app.
+2. Start in Element een chat met: @gmessagesbot:my.local.matrix.
+3. Stuur het bericht: login.
+4. Open Google Messages op de telefoon > Menu > Apparaat koppelen.
+5. Scan de QR-code.
 
-Start in Element een chat met: @gmessagesbot:my.local.matrix.
+⚙️ ConfiguratieDe basisinstellingen vind je in het bestand .env in de hoofdmap (/opt/etherdesk/.env).
+Variabele Omschrijving Voorbeeld
+STUDIO_NAME De naam bovenaan het dashboard "Radio Capri"
+SLOGAN De subtitel onder de naam "Helemaal vanuit Bentelo!"
+PAGE_TITLE Titel in browser tabblad "Radio Capri"
+MATRIX_TOKEN Het geheime token voor de bot (Automatisch gegenereerd)
+POSTGRES_PASSWORD Database wachtwoord (Kies een sterk wachtwoord)
 
-Stuur het bericht: login.
+Na wijzigingen in dit bestand altijd even herstarten met: docker compose up -d.
 
-Open Google Messages op de telefoon > Menu > Apparaat koppelen.
+🔄 Updates Draaien
+1. Wanneer er een nieuwe versie op GitHub staat, verschijnt er automatisch een Paarse Melding bovenin het dashboard.
+2. Klik op de knop [ NU INSTALLEREN ].
+3. De software downloadt de laatste code en herbouwt de container.
+4. Het systeem herstart automatisch (duurt ca. 30 seconden).
+5. De pagina ververst zichzelf en de nieuwe versie is actief.
 
-Scan de QR-code.
+📂 Mappenstructuur
+/app: De broncode van de applicatie (Python/HTML).
+/data: Permanente opslag (Database, WhatsApp sessies). Wordt nooit overschreven.
+.env: Je lokale configuratie en wachtwoorden.
 
-
+© 2026 Broadcast Innovations. Alle rechten voorbehouden.
