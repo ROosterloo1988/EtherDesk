@@ -1,2 +1,2 @@
 # EtherDesk
-Dasboard om Element en Synapse.
+Dashboard om Element en Synapse.
