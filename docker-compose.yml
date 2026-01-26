@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: synapse
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - ether_net
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: etherdesk-synapse-1
+    restart: unless-stopped
+    environment:
+      - SYNAPSE_SERVER_NAME=${SERVER_NAME}
+      - SYNAPSE_REPORT_STATS=no
+    volumes:
+      - ./data/synapse:/data
+    ports:
+      - "8008:8008"
+    depends_on:
+      - postgres
+    networks:
+      - ether_net
+
+  dashboard:
+    build: ./app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - TZ=${TIMEZONE}
+      - MATRIX_URL=${MATRIX_URL}
+      - MATRIX_USER=${MATRIX_USER}
+      - MATRIX_TOKEN=${MATRIX_TOKEN}
+      - STUDIO_NAME=${STUDIO_NAME}
+      - SLOGAN=${SLOGAN}
+      - PAGE_TITLE=${PAGE_TITLE}
+    volumes:
+      - ./app:/app
+      - ./data/dashboard:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      # BELANGRIJK: Koppel de .env file zodat Python hem kan aanpassen
+      - ./.env:/app/.env
+    networks:
+      - ether_net
+
+  mautrix-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/whatsapp:/data
+    networks:
+      - ether_net
+
+  mautrix-gmessages:
+    image: dock.mau.dev/mautrix/gmessages:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/gmessages:/data
+    networks:
+      - ether_net
+
+networks:
+  ether_net:
