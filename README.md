@@ -100,8 +100,11 @@ Na wijzigingen in dit bestand altijd even herstarten met: docker compose up -d.
 5. De pagina ververst zichzelf en de nieuwe versie is actief.
 
 📂 Mappenstructuur
+
 /app: De broncode van de applicatie (Python/HTML).
+
 /data: Permanente opslag (Database, WhatsApp sessies). Wordt nooit overschreven.
+
 .env: Je lokale configuratie en wachtwoorden.
 
 © 2026 Broadcast Innovations. Alle rechten voorbehouden.
