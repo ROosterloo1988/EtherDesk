@@ -34,7 +34,7 @@ sudo apt update && sudo apt install -y git
 
 # 2. Clone de repository
 # Vervang <JOUW_REPO_URL> met de url van je Github repo
-sudo git clone [https://github.com/BroadcastInnovations/EtherDesk.git](https://github.com/BroadcastInnovations/EtherDesk.git) /opt/etherdesk
+sudo git clone [https://github.com/ROosterloo1988/EtherDesk.git](https://github.com/ROosterloo1988/EtherDesk.git) /opt/etherdesk
 
 # 3. Start de Automatische Installer
 cd /opt/etherdesk
@@ -69,7 +69,7 @@ EtherDesk gebruikt interne bridges om te verbinden met WhatsApp en SMS.
 
 WhatsApp Koppelen
 1. Open Element (of een andere Matrix client) op je PC.
-2. Verbind met je eigen server: http://<IP-VAN-JE-SERVER>:8008.
+2. Verbind met je eigen server: http://IP-VAN-JE-SERVER:8008.
 3. Start een chat met: @whatsappbot:my.local.matrix.
 4. Stuur het bericht: login.
 5. Scan de QR-code die verschijnt met de WhatsApp App op je studio-telefoon (Menu > Gekoppelde apparaten).
