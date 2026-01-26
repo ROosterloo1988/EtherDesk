@@ -81,7 +81,8 @@ SMS Koppelen (Via Android)
 4. Open Google Messages op de telefoon > Menu > Apparaat koppelen.
 5. Scan de QR-code.
 
-⚙️ ConfiguratieDe basisinstellingen vind je in het bestand .env in de hoofdmap (/opt/etherdesk/.env).
+⚙️ Configuratie
+De basisinstellingen vind je in het bestand .env in de hoofdmap (/opt/etherdesk/.env).
 Variabele Omschrijving Voorbeeld
 STUDIO_NAME De naam bovenaan het dashboard "Radio Capri"
 SLOGAN De subtitel onder de naam "Helemaal vanuit Bentelo!"
