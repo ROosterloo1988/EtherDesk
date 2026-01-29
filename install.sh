@@ -121,8 +121,8 @@ fi
 echo ""
 echo -e "${BLUE}🚀 Alles is geconfigureerd! Starten maar...${NC}"
 
-# Rechten fixen voor docker socket
-chmod +x start.sh 2>/dev/null
+# Rechten fixen voor het startscript in de submap
+chmod +x app/start.sh 2>/dev/null
 
 if groups | grep -q "docker"; then
     docker compose up -d --build
