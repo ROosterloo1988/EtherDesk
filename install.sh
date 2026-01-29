@@ -6,13 +6,15 @@ DATA_DIR="$INSTALL_DIR/data"
 WA_DIR="$DATA_DIR/whatsapp"
 SYNAPSE_DIR="$DATA_DIR/synapse"
 APP_DIR="$INSTALL_DIR/app"
+SERVER_NAME="my.local.matrix"
 
 # Kleurtjes
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== ETHERDESK DEFINITIVE INSTALLER ===${NC}"
+echo -e "${BLUE}=== ETHERDESK SYSTEM INSTALLER ===${NC}"
+echo "Dit script bereidt de server voor zodat de klant de setup kan doen."
 
 # 1. Docker Check
 if ! command -v docker &> /dev/null; then
@@ -22,29 +24,34 @@ if ! command -v docker &> /dev/null; then
     rm get-docker.sh
 fi
 
-# 2. Alles stoppen en opschonen (zodat we vers beginnen)
-echo "Oude containers stoppen..."
+# 2. Schoon Schip
+echo "Omgeving voorbereiden..."
 cd $INSTALL_DIR
 docker compose down > /dev/null 2>&1
 
-# 3. Mappen & Rechten (De botte bijl methode: alles mag alles)
-echo "Mappen en rechten herstellen..."
+# Mappen structuur
 mkdir -p $APP_DIR/templates $APP_DIR/static
 mkdir -p $WA_DIR $SYNAPSE_DIR
 
-# Database file alvast aanmaken om crashes te voorkomen
+# CRUCIAAL: Zorg dat de lege database file bestaat om crashes te voorkomen
 touch $WA_DIR/whatsapp.db
 
-# Rechten openzetten
+# CRUCIAAL: Lege .env aanmaken en beschrijfbaar maken voor de web-setup
+if [ ! -f $APP_DIR/.env ]; then touch $APP_DIR/.env; fi
+chmod 666 $APP_DIR/.env
+
+# Rechten openzetten (zodat Synapse en de Web App overal bij kunnen)
 chmod -R 777 $INSTALL_DIR
 chown -R 1000:1000 $DATA_DIR
 
-# 4. WhatsApp Configureren (De werkende config forceren)
-echo "WhatsApp Config schrijven..."
+# 3. Configuraties Schrijven (De technische fixes)
+# We schrijven hier de werkende configs, zodat de klant geen technische errors krijgt.
+
+echo "WhatsApp Configureren..."
 cat > $WA_DIR/config.yaml <<EOF
 homeserver:
     address: http://synapse:8008
-    domain: my.local.matrix
+    domain: $SERVER_NAME
     verify_ssl: false
 appservice:
     address: http://mautrix-whatsapp:29318
@@ -75,8 +82,8 @@ bridge:
         allow_key_sharing: true
 permissions:
     "*": "relay"
-    "my.local.matrix": "admin"
-    "@etherdesk:my.local.matrix": "admin"
+    "$SERVER_NAME": "admin"
+    "@etherdesk:$SERVER_NAME": "admin"
 logging:
     min_level: info
     writers:
@@ -84,15 +91,17 @@ logging:
       format: pretty-colored
 EOF
 
-# 5. Synapse Configureren
+# 4. Synapse Configureren
+# We moeten zorgen dat 'registration' aan staat, anders werkt de web-setup niet!
 if [ ! -f "$SYNAPSE_DIR/homeserver.yaml" ]; then
     echo "Synapse config genereren..."
-    docker run --rm -v "$SYNAPSE_DIR:/data" -e SYNAPSE_SERVER_NAME=my.local.matrix -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
-    # Registratie aanzetten
+    docker run --rm -v "$SYNAPSE_DIR:/data" -e SYNAPSE_SERVER_NAME=$SERVER_NAME -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
+    
+    # BELANGRIJK: Zet registratie AAN zodat de web-app een user kan maken
     sed -i 's/enable_registration: false/enable_registration: true/g' $SYNAPSE_DIR/homeserver.yaml
 fi
 
-# 6. Docker Compose updaten
+# 5. Docker Compose
 echo "Docker Compose updaten..."
 cat > $INSTALL_DIR/docker-compose.yml <<EOF
 services:
@@ -128,21 +137,25 @@ services:
       - mautrix-whatsapp
 EOF
 
-# 7. Sleutels Genereren (De cruciale stap)
+# 6. Sleutels Genereren (De technische koppeling)
 echo "Sleutels genereren..."
-# We gebruiken de docker-compose file om de tool te draaien, zodat de volumes kloppen
 docker compose run --rm mautrix-whatsapp /usr/bin/python3 -m mautrix_whatsapp -g -c /data/config.yaml -r /data/registration.yaml > /dev/null 2>&1
 
-# URL Fixen (dit ging steeds mis, nu doen we het hardcoded)
+# URL Fixen
 sed -i 's|url: http://localhost:29318|url: http://mautrix-whatsapp:29318|g' $WA_DIR/registration.yaml
 
 # Kopiëren naar Synapse
 cp $WA_DIR/registration.yaml $SYNAPSE_DIR/whatsapp-registration.yaml
 chmod 644 $SYNAPSE_DIR/whatsapp-registration.yaml
 
-# 8. Starten
+# 7. Starten
 echo -e "${GREEN}Configuratie gereed. Starten...${NC}"
 docker compose up -d --build
 
 echo ""
-echo -e "${GREEN}KLAAR! Wacht 30 seconden en ga naar het dashboard.${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo -e "${GREEN}   SYSTEEM GEREED VOOR KLANT SETUP 🚀    ${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo "1. Het systeem draait."
+echo "2. De klant kan nu naar http://<IP-ADRES> gaan."
+echo "3. Daar verschijnt het setup scherm voor Naam, Slogan en Account."
