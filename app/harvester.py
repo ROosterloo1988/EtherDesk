@@ -89,15 +89,18 @@ while True:
             if not wa_room: wa_room = create_dm(token, user, "whatsappbot")
             
             if wa_room:
-                # 1. Stuur Login
+                # TRUC: Eerst uitloggen voor de zekerheid, dan inloggen
+                log(f"Stuur 'logout' naar {wa_room} (Clean start)")
+                send_message(token, wa_room, "logout")
+                time.sleep(2)
+                
                 log(f"Stuur 'login' naar {wa_room}")
                 send_message(token, wa_room, "login")
                 
-                log("Luisteren naar antwoord...")
                 found_qr = False
                 
-                # 2. Luisterloop (30 sec)
-                for _ in range(15): 
+                # Pollen voor 40 seconden
+                for _ in range(20): 
                     try:
                         sync_url = f"{HOMESERVER}/_matrix/client/r0/sync?timeout=2000&since={next_batch}"
                         r = requests.get(sync_url, headers={"Authorization": f"Bearer {token}"})
@@ -110,7 +113,7 @@ while True:
                             for e in events:
                                 sender = e.get('sender')
                                 content = e.get('content', {})
-                                if sender == user: continue # Negeer mezelf
+                                if sender == user: continue 
 
                                 # CHECK: PLAATJE (QR)
                                 if content.get('msgtype') == 'm.image':
@@ -125,16 +128,25 @@ while True:
                                     body = content.get('body', '')
                                     log(f"Bot zegt: {body}")
                                     
-                                    # DE FIX: Als bot zich voorstelt, dwing login af!
-                                    if "Hello, I'm a WhatsApp bridge" in body or "help" in body.lower():
-                                        log("Bot stelt zich voor. Ik forceer 'login' nogmaals!")
+                                    # Als hij zegt: "Successfully logged out", stuur dan nog eens login
+                                    if "Logged out" in body:
+                                        log("Logout bevestigd. Nogmaals login sturen...")
                                         time.sleep(1)
                                         send_message(token, wa_room, "login")
 
-                                    if "Logged in" in body:
-                                        log("Reeds ingelogd.")
-                                        found_qr = True # Stop met zoeken
-                                        break
+                                    # Als hij zich voorstelt
+                                    if "Hello" in body or "help" in body.lower():
+                                        log("Bot zegt hallo. Ik stuur 'login'...")
+                                        time.sleep(1)
+                                        send_message(token, wa_room, "login")
+                                    
+                                    if "Already logged in" in body:
+                                        # Als hij dit zegt, MOETEN we uitloggen
+                                        log("Oeps, al ingelogd. Stuur logout...")
+                                        send_message(token, wa_room, "logout")
+                                        time.sleep(1)
+                                        send_message(token, wa_room, "login")
+
                     except Exception as e: log(f"Sync fout: {e}")
                     
                     if found_qr or os.path.exists(f"{STATIC_DIR}/qr_whatsapp.png"):
