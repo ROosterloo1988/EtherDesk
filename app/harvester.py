@@ -83,23 +83,24 @@ while True:
             continue
 
     if os.path.exists(CMD_FILE_WA):
-        log("COMMAND: LOGIN WhatsApp")
+        log("COMMAND: LOGIN QR WhatsApp")
         try:
             os.remove(CMD_FILE_WA)
             if not wa_room: wa_room = create_dm(token, user, "whatsappbot")
             
             if wa_room:
-                # TRUC: Eerst uitloggen voor de zekerheid, dan inloggen
-                log(f"Stuur 'logout' naar {wa_room} (Clean start)")
+                # 1. Resetten voor de zekerheid
+                log(f"Stuur 'logout' naar {wa_room}")
                 send_message(token, wa_room, "logout")
-                time.sleep(2)
+                time.sleep(1)
                 
-                log(f"Stuur 'login' naar {wa_room}")
-                send_message(token, wa_room, "login")
+                # 2. HET JUISTE COMMANDO
+                log(f"Stuur 'login qr' naar {wa_room}")
+                send_message(token, wa_room, "login qr")
                 
                 found_qr = False
                 
-                # Pollen voor 40 seconden
+                # 3. Luisteren
                 for _ in range(20): 
                     try:
                         sync_url = f"{HOMESERVER}/_matrix/client/r0/sync?timeout=2000&since={next_batch}"
@@ -115,7 +116,7 @@ while True:
                                 content = e.get('content', {})
                                 if sender == user: continue 
 
-                                # CHECK: PLAATJE (QR)
+                                # QR Code gevonden?
                                 if content.get('msgtype') == 'm.image':
                                     mxc = content.get('url')
                                     log(f"Plaatje ontvangen! URL: {mxc}")
@@ -123,40 +124,9 @@ while True:
                                         found_qr = True
                                         break 
                                 
-                                # CHECK: TEKST
+                                # Tekst reacties
                                 if content.get('msgtype') == 'm.text':
                                     body = content.get('body', '')
                                     log(f"Bot zegt: {body}")
                                     
-                                    # Als hij zegt: "Successfully logged out", stuur dan nog eens login
-                                    if "Logged out" in body:
-                                        log("Logout bevestigd. Nogmaals login sturen...")
-                                        time.sleep(1)
-                                        send_message(token, wa_room, "login")
-
-                                    # Als hij zich voorstelt
-                                    if "Hello" in body or "help" in body.lower():
-                                        log("Bot zegt hallo. Ik stuur 'login'...")
-                                        time.sleep(1)
-                                        send_message(token, wa_room, "login")
-                                    
-                                    if "Already logged in" in body:
-                                        # Als hij dit zegt, MOETEN we uitloggen
-                                        log("Oeps, al ingelogd. Stuur logout...")
-                                        send_message(token, wa_room, "logout")
-                                        time.sleep(1)
-                                        send_message(token, wa_room, "login")
-
-                    except Exception as e: log(f"Sync fout: {e}")
-                    
-                    if found_qr or os.path.exists(f"{STATIC_DIR}/qr_whatsapp.png"):
-                        break
-                    time.sleep(1)
-                        
-        except Exception as e: log(f"Fout in WA flow: {e}")
-
-    if os.path.exists(CMD_FILE_SMS):
-        try: os.remove(CMD_FILE_SMS)
-        except: pass
-
-    time.sleep(1)
+                                    # Als hij zegt 'Already logged in',
