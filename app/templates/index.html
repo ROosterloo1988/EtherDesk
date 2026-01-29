@@ -3,81 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page_title }}</title> <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <title>{{ page_title }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-dark: #0f172a; --bg-card: #1e293b; --accent-primary: #3b82f6; --accent-success: #10b981; --accent-warning: #f59e0b; --text-main: #f1f5f9; --text-muted: #94a3b8; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 15px; }
-        .wrapper { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
-        .brand h1 { margin: 0; font-size: 1.6em; text-transform: uppercase; } .brand span { color: var(--accent-warning); }
-        .brand .subtitle { color: var(--text-muted); font-size: 0.8em; font-family: 'JetBrains Mono', monospace; }
-        .header-meta { text-align: right; }
-        .status-dot { color:var(--accent-success); font-weight:bold; font-size: 0.8em; letter-spacing: 1px;}
-        .powered-by { font-size: 0.65em; color: var(--text-muted); opacity: 0.7; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
-        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .stat-card { background: var(--bg-card); padding: 8px 15px; border-radius: 8px; border: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; height: 50px; }
-        .stat-card h3 { margin: 0; color: var(--text-muted); font-size: 0.7em; text-transform: uppercase; }
-        .stat-card .value { font-size: 1.5em; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
-        .stat-icon { font-size: 1.2em; opacity: 0.5; }
-        #update-bar, #msg-bar { display: none; color: white; text-align: center; padding: 10px; font-weight: 800; font-size: 0.9em; cursor: pointer; margin-bottom: 15px; border-radius: 6px; text-transform: uppercase; animation: pulse 2s infinite; }
-        #update-bar { background: linear-gradient(90deg, #8b5cf6, #7c3aed); box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
-        #msg-bar { background: linear-gradient(90deg, var(--accent-success), #10b981); box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
-        .btn-update { background: white; color: #7c3aed; border: none; padding: 5px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-left: 15px; text-transform: uppercase; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.01); } 100% { transform: scale(1); } }
-        .msg-list { display: flex; flex-direction: column; gap: 8px; }
-        .msg-card { background: var(--bg-card); border-left: 3px solid var(--bg-card); padding: 10px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: flex-start; }
-        .is-unread { border-left-color: var(--accent-warning); background: #283044; } .is-unread .msg-content { font-size: 1.1em; font-weight: 600; color: #fff; }
-        .is-read { opacity: 0.7; border-left-color: #475569; } .is-read .msg-content { color: var(--text-muted); font-size: 0.95em; }
-        .sender-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.75em; margin-top: 4px; color: var(--accent-primary); display: flex; align-items: center; gap: 8px;}
-        .tag { padding: 1px 4px; border-radius: 3px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; color: #000; }
-        .tag-wa { background: var(--accent-success); } .tag-sms { background: var(--accent-warning); } .tag-mx { background: #94a3b8; }
-        .btn-archive { background: transparent; border: 1px solid var(--text-muted); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: 4px; margin-top: 5px; font-size: 0.8em; }
-        .empty-state { text-align: center; padding: 25px; color: var(--text-muted); border: 2px dashed #334155; border-radius: 12px; font-weight: bold; font-size: 1em;}
-        #chart-wrapper { display: none; margin-bottom: 20px; background: var(--bg-card); padding: 15px; border-radius: 12px; border: 1px solid #334155; height: 200px; }
-        .btn-toggle { background: transparent; border: 1px solid #334155; color: var(--text-muted); padding: 5px 12px; border-radius: 15px; font-size: 0.75em; cursor: pointer; }
+        :root { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --text-muted: #94a3b8; --primary: #3b82f6; --success: #10b981; --wa: #25D366; --sms: #4285F4; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        
+        /* Layout Grid */
+        .container { display: grid; grid-template-columns: 300px 1fr; gap: 20px; height: 100%; }
+        
+        /* Sidebar */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+        
+        h1 { margin: 0; font-size: 1.2rem; color: var(--primary); }
+        h2 { margin: 0 0 10px 0; font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .slogan { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px; display: block; }
+        
+        /* Stats */
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem; }
+        .stat-val { font-weight: bold; }
+
+        /* Knoppen */
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; margin-bottom: 10px; transition: opacity 0.2s; text-align: left; display: flex; align-items: center; justify-content: space-between; }
+        .btn:hover { opacity: 0.9; }
+        .btn-wa { background: var(--wa); }
+        .btn-sms { background: var(--sms); }
+        .btn-update { background: #f59e0b; display: none; text-align: center; justify-content: center; }
+
+        /* Berichtencentrum */
+        .main-content { background: var(--card); border-radius: 12px; border: 1px solid #334155; display: flex; flex-direction: column; overflow: hidden; }
+        .header { padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+        .msg-list { flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none; }
+        
+        .msg-item { padding: 15px 20px; border-bottom: 1px solid #334155; animation: fadeIn 0.3s ease; }
+        .msg-item.unread { background: rgba(59, 130, 246, 0.1); border-left: 4px solid var(--primary); }
+        .msg-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; }
+        .msg-body { font-size: 1rem; line-height: 1.4; white-space: pre-wrap; }
+        .source-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .bg-WhatsApp { background: var(--wa); color: #000; }
+        .bg-SMS { background: var(--sms); color: #fff; }
+        .bg-Matrix { background: #fff; color: #000; }
+
+        /* QR Modal */
+        #qrModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 12px; text-align: center; max-width: 400px; width: 100%; position: relative; }
+        .close-modal { position: absolute; top: 10px; right: 15px; color: #fff; cursor: pointer; font-size: 1.5rem; }
+        #qrImage { max-width: 250px; border: 5px solid white; display: none; margin: 20px auto; }
+        #qrStatus { color: var(--text-muted); font-family: monospace; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-<div class="wrapper">
-    <div class="header">
-        <div class="brand"><h1>{{ studio_name }}</h1><div class="subtitle">{{ slogan }}</div></div>
-        <div class="header-meta"><div class="status-dot">● STUDIO LIVE</div><div class="powered-by">EtherDesk | Product of Broadcast Innovations</div></div>
+
+<div class="container">
+    <div class="sidebar">
+        <div class="card">
+            <h1>{{ studio_name }}</h1>
+            <span class="slogan">{{ slogan }}</span>
+            <hr style="border-color: #334155; margin: 15px 0;">
+            
+            <div class="stat-row"><span>Vandaag:</span> <span class="stat-val" id="stat-total">-</span></div>
+            <div class="stat-row"><span>Ongelezen:</span> <span class="stat-val" id="stat-unread">-</span></div>
+        </div>
+
+        <div class="card">
+            <h2>Verbindingen</h2>
+            <button class="btn btn-wa" onclick="openQrModal('whatsapp')">
+                <span>WhatsApp Koppelen</span> <span>🔗</span>
+            </button>
+            <button class="btn btn-sms" onclick="openQrModal('gmessages')">
+                <span>SMS Koppelen</span> <span>💬</span>
+            </button>
+            <p style="font-size:0.75rem; color:#64748b; margin-top:10px;">
+                Klik om een verbinding te starten of te herstellen.
+            </p>
+        </div>
+
+        <button id="updateBtn" class="btn btn-update" onclick="doUpdate()">🚀 Update Beschikbaar!</button>
     </div>
-    
-    <div id="update-bar">🚀 Update Beschikbaar <span id="version-lbl"></span> <button class="btn-update" onclick="runUpdate()">Nu Installeren</button></div>
-    <div id="msg-bar" onclick="applyPendingUpdates()">📨 ER ZIJN NIEUWE BERICHTEN! KLIK HIER.</div>
-    
-    <div class="dashboard-grid">
-        <div class="stat-card"><div><h3>Openstaand</h3><div class="value" style="color:#f59e0b" id="stat-unread">0</div></div><div class="stat-icon">📨</div></div>
-        <div class="stat-card"><div><h3>Vandaag Totaal</h3><div class="value" style="color:#3b82f6" id="stat-today">0</div></div><div class="stat-icon">📈</div></div>
-        <div class="stat-card"><div><h3>Tijd</h3><div class="value" id="clock">00:00</div></div><div class="stat-icon">🕒</div></div>
+
+    <div class="main-content">
+        <div class="header">
+            <h2 style="color:white; margin:0;">Inkomende Berichten</h2>
+            <div style="font-size:0.8rem; color:#64748b;">Live feed</div>
+        </div>
+        <ul class="msg-list" id="msgList">
+            <li style="padding:20px; text-align:center; color:#64748b;">Laden...</li>
+        </ul>
     </div>
-    
-    <div style="text-align:center; margin-bottom:20px"><button class="btn-toggle" onclick="toggleChart()">📊 Trend Analyse</button></div>
-    <div id="chart-wrapper"><canvas id="msgChart"></canvas></div>
-    
-    <div style="margin:10px 0; font-weight:bold; font-size:1.1em">📡 Verzoekserver (Live)</div>
-    <div id="inbox-container" class="msg-list"></div>
-    <div id="inbox-empty" class="empty-state" style="display:none">Geen ongelezen berichten. Tijd voor hits! 🎵</div>
-    
-    <div style="margin:10px 0; font-weight:bold; font-size:1.1em; color:#94a3b8">🗄️ Archief</div>
-    <div id="archive-container" class="msg-list"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div id="qrModal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeQrModal()">&times;</span>
+        <h2 id="modalTitle">Koppelen</h2>
+        <p style="font-size:0.9rem; color:#94a3b8;">Open de app op je telefoon en scan de code.</p>
+        
+        <div id="qrStatus">Verbinding maken met bridge...</div>
+        <img id="qrImage" src="" alt="QR Code">
+    </div>
+</div>
+
 <script>
-    let msgChart; let currentlyDisplayedIds = new Set(); let bufferedData = null;
-    setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'}); }, 1000);
-    function toggleChart() { const wrapper = document.getElementById('chart-wrapper'); wrapper.style.display = (wrapper.style.display === 'block') ? 'none' : 'block'; }
-    function initChart() { const ctx = document.getElementById('msgChart').getContext('2d'); msgChart = new Chart(ctx, { type: 'bar', data: { labels: [], datasets: [{ label: 'Berichten', data: [], backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } } } }); }
-    function startLoop() { fetchData(); checkUpdate(); setInterval(fetchData, 4000); setInterval(checkUpdate, 300000); }
-    function checkUpdate() { fetch('/api/check_update').then(res => res.json()).then(data => { if(data.available) { document.getElementById('update-bar').style.display = 'block'; document.getElementById('version-lbl').innerText = `(Versie ${data.new})`; } }); }
-    function runUpdate() { if(!confirm("Studio gaat 30 sec offline. Doorgaan?")) return; document.getElementById('update-bar').innerHTML = "⏳ Bezig..."; fetch('/api/do_update', { method: 'POST' }).then(() => { setTimeout(() => location.reload(), 30000); }); }
-    function fetchData() { const t = new Date().getTime(); fetch(`/api/stats?t=${t}`).then(r=>r.json()).then(d=>{ document.getElementById('stat-unread').innerText = d.unread_total; document.getElementById('stat-today').innerText = d.total_today; if(msgChart){msgChart.data.labels=d.chart_labels; msgChart.data.datasets[0].data=d.chart_values; msgChart.update();} }); fetch(`/api/messages?t=${t}`).then(r=>r.json()).then(m=>{ checkForUpdates(m); }); }
-    function checkForUpdates(msgs) { if(currentlyDisplayedIds.size === 0) { renderMessages(msgs); return; } let hasNew = false; msgs.forEach(m => { if(!m.is_read && !currentlyDisplayedIds.has(m.id)) hasNew = true; }); if(hasNew) { bufferedData = msgs; document.getElementById('msg-bar').style.display = 'block'; document.title = "(1) NIEUWE VERZOEKJES!"; } }
-    function applyPendingUpdates() { if(bufferedData) { renderMessages(bufferedData); bufferedData = null; } document.getElementById('msg-bar').style.display = 'none'; document.title = "Radio Capri"; }
-    function renderMessages(msgs) { const i = document.getElementById('inbox-container'); const a = document.getElementById('archive-container'); let hI='', hA='', cnt=0; currentlyDisplayedIds.clear(); msgs.forEach(m => { currentlyDisplayedIds.add(m.id); let b = '<span class="tag tag-mx">MX</span>'; if(m.source==='WhatsApp') b='<span class="tag tag-wa">WA</span>'; if(m.source==='SMS') b='<span class="tag tag-sms">SMS</span>'; let s = m.sender_number; if(m.sender_name) s = (m.sender_number === "Nummer onbekend") ? m.sender_name : `${m.sender_name} <small>(${m.sender_number})</small>`; const html = `<div class="msg-card ${m.is_read?'is-read':'is-unread'}" id="msg-${m.id}"><div style="flex-grow:1; margin-right:15px;"><div class="msg-content">${m.message}</div><div class="sender-meta">${b} ${s}</div></div><div style="text-align:right;"><span class="time-stamp">${m.timestamp.split(' ')[1].substr(0, 5)}</span><br>${!m.is_read ? `<button class="btn-archive" onclick="moveToArchive(${m.id})">✔ AFHANDELEN</button>` : ''}</div></div>`; if(m.is_read) hA+=html; else {hI+=html; cnt++;} }); i.innerHTML=hI; a.innerHTML=hA; document.getElementById('inbox-empty').style.display=(cnt===0)?'block':'none'; }
-    function moveToArchive(id) { const c = document.getElementById(`msg-${id}`); if(c){ c.classList.remove('is-unread'); c.classList.add('is-read'); c.querySelector('button').remove(); document.getElementById('archive-container').prepend(c); if(document.getElementById('inbox-container').children.length===0) document.getElementById('inbox-empty').style.display='block'; } fetch(`/api/mark_read/${id}`, { method: 'POST' }); }
-    initChart(); startLoop();
-</script>
-</body>
-</html>
+    // --- FUNCTIES VOOR BERICHTEN ---
+    function loadStats() {
+        fetch('/api/stats').then(r => r.json()).then(d => {
+            document.getElementById('stat-total').
