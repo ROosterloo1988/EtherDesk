@@ -47,12 +47,12 @@ SERVER_NAME=$(get_env SERVER_NAME || echo "my.local.matrix")
 CURRENT_NAME=$(get_env STUDIO_NAME)
 
 if [ "$CURRENT_NAME" == "EtherDesk Studio" ] || [ -z "$CURRENT_NAME" ]; then
-    read -p "Studio Naam [Radio Capri]: " INPUT_NAME
+    read -p "Studio Naam [EtherDesk]: " INPUT_NAME
     INPUT_NAME=${INPUT_NAME:-Radio Capri}
     sed -i "s/STUDIO_NAME=.*/STUDIO_NAME=\"$INPUT_NAME\"/" .env
     
-    read -p "Slogan [Vanuit Bentelo!]: " INPUT_SLOGAN
-    INPUT_SLOGAN=${INPUT_SLOGAN:-Vanuit Bentelo!}
+    read -p "Slogan [Meer voor mannen!]: " INPUT_SLOGAN
+    INPUT_SLOGAN=${INPUT_SLOGAN:-Meer voor mannen!}
     sed -i "s/SLOGAN=.*/SLOGAN=\"$INPUT_SLOGAN\"/" .env
 fi
 
