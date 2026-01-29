@@ -7,15 +7,16 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${BLUE}#########################################${NC}"
-echo -e "${BLUE}#     ETHERDESK AUTO-INSTALLER V5.0     #${NC}"
-echo -e "${BLUE}#     Custom Credentials Edition        #${NC}"
+echo -e "${BLUE}#     ETHERDESK AUTO-INSTALLER V5.1     #${NC}"
+echo -e "${BLUE}#     VM & Permission Fix Edition       #${NC}"
 echo -e "${BLUE}#########################################${NC}"
 echo ""
 
-# --- 1. CHECKS ---
+# --- 1. CHECKS & DEPENDENCIES ---
 echo -e "${BLUE}[1/7] Systeem checks...${NC}"
 check_install() {
     if ! [ -x "$(command -v $1)" ]; then
+        echo " -> Installing $1..."
         sudo apt-get update > /dev/null
         sudo apt-get install -y $1 > /dev/null
     fi
@@ -23,7 +24,9 @@ check_install() {
 check_install curl
 check_install git
 check_install nano
-check_install python3 
+check_install python3
+# FIX: Haveged zorgt voor entropie in VM's zodat Synapse niet blijft hangen
+check_install haveged 
 
 if ! [ -x "$(command -v docker)" ]; then
     echo -e "${RED} -> Docker installeren...${NC}"
@@ -81,39 +84,67 @@ SERVER_NAME=$(get_env SERVER_NAME || echo "my.local.matrix")
 # Update .env met de nieuwe username
 sed -i "s/MATRIX_USER=.*/MATRIX_USER=@$MATRIX_UID:$SERVER_NAME/" .env
 
-# --- 3. MAPPEN ---
+# --- 3. MAPPEN & RECHTEN ---
 echo -e "${BLUE}[3/7] Mappenstructuur...${NC}"
 mkdir -p data/postgres data/synapse data/dashboard data/whatsapp data/gmessages app/static
 chmod +x app/start.sh 2>/dev/null
+# FIX: Zorg dat iedereen in data mag schrijven (voorkomt permission errors)
 chmod -R 777 data app/static
 
 # --- 4. PREP CONFIGS ---
 echo -e "${BLUE}[4/7] Matrix & Bridges voorbereiden...${NC}"
-# Synapse Config
+
+# Synapse Config Genereren
 if [ ! -f data/synapse/homeserver.yaml ]; then
+    echo " -> Synapse config genereren..."
     docker run --rm -v $(pwd)/data/synapse:/data -e SYNAPSE_SERVER_NAME=$SERVER_NAME -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
     sed -i 's/enable_registration: false/enable_registration: true/' data/synapse/homeserver.yaml
+    # FIX: Rechten direct herstellen na generatie
+    chmod 666 data/synapse/homeserver.yaml
 fi
 
-# Bridges Config
+# Bridges Configureren
 configure_bridge() {
     SERVICE=$1
     DIR="data/$1"
+    
+    echo " -> Configureren $SERVICE..."
+    
     if [ ! -f $DIR/config.yaml ]; then
+        # 1. Config genereren
         docker run --rm -v $(pwd)/$DIR:/data dock.mau.dev/mautrix/$1:latest > /dev/null 2>&1
+        
+        # 2. Config patchen
         sed -i 's|address: http://localhost:8008|address: http://synapse:8008|g' $DIR/config.yaml
         sed -i "s|domain: example.com|domain: $SERVER_NAME|g" $DIR/config.yaml
         sed -i "s|\"example.com\": \"user\"|\"$SERVER_NAME\": \"admin\"\n  \"@$MATRIX_UID:$SERVER_NAME\": \"admin\"|g" $DIR/config.yaml
         
+        # 3. Registratie genereren
         docker run --rm -v $(pwd)/$DIR:/data dock.mau.dev/mautrix/$1:latest /usr/bin/mautrix-$1 -g -c /data/config.yaml -r /data/registration.yaml
+        
+        # 4. Kopiëren naar Synapse map
         cp $DIR/registration.yaml data/synapse/$SERVICE-registration.yaml
         
-        if ! grep -q "app_service_config_files" data/synapse/homeserver.yaml; then echo "app_service_config_files:" >> data/synapse/homeserver.yaml; fi
-        if ! grep -q "$SERVICE-registration.yaml" data/synapse/homeserver.yaml; then echo "  - /data/$SERVICE-registration.yaml" >> data/synapse/homeserver.yaml; fi
+        # FIX: Rechten herstellen zodat Synapse (user 991) het mag lezen
+        chmod 644 data/synapse/$SERVICE-registration.yaml
+        
+        # 5. Koppelen in homeserver.yaml (MET WITREGEL FIX)
+        if ! grep -q "$SERVICE-registration.yaml" data/synapse/homeserver.yaml; then
+            # Als de header nog niet bestaat, voeg die toe mét een witregel ervoor
+            if ! grep -q "app_service_config_files:" data/synapse/homeserver.yaml; then
+                 echo "" >> data/synapse/homeserver.yaml
+                 echo "app_service_config_files:" >> data/synapse/homeserver.yaml
+            fi
+            echo "  - /data/$SERVICE-registration.yaml" >> data/synapse/homeserver.yaml
+        fi
     fi
 }
+
 configure_bridge "whatsapp"
 configure_bridge "gmessages"
+
+# Nog één keer rechten fixen voor de zekerheid
+chmod -R 777 data
 
 # --- 5. STARTEN ---
 echo -e "${BLUE}[5/7] Containers Starten...${NC}"
@@ -133,6 +164,7 @@ if [ -z "$CURRENT_TOKEN" ] || [ ${#CURRENT_TOKEN} -lt 10 ]; then
         sleep 5
         echo -n "."
         COUNTER=$((COUNTER+1))
+        # Timeout na 2 minuten
         if [ $COUNTER -gt 24 ]; then
             echo ""
             echo -e "${RED}ERROR: Synapse start niet op tijd op.${NC}"
@@ -143,6 +175,7 @@ if [ -z "$CURRENT_TOKEN" ] || [ ${#CURRENT_TOKEN} -lt 10 ]; then
     echo " Online!"
 
     echo " -> Gebruiker '$MATRIX_UID' registreren..."
+    # FIX: Check of user al bestaat, anders error negeren
     docker exec etherdesk-synapse-1 register_new_matrix_user -u "$MATRIX_UID" -p "$MATRIX_PW" -c /data/homeserver.yaml --admin 2>/dev/null || true
     
     echo " -> Token ophalen..."
@@ -153,7 +186,7 @@ if [ -z "$CURRENT_TOKEN" ] || [ ${#CURRENT_TOKEN} -lt 10 ]; then
         echo -e "${GREEN} -> Token ontvangen!${NC}"
         if grep -q "MATRIX_TOKEN=" .env; then sed -i "s|MATRIX_TOKEN=.*|MATRIX_TOKEN=$TOKEN|" .env; else echo "MATRIX_TOKEN=$TOKEN" >> .env; fi
         
-        # Gegevens opslaan in tekstbestand
+        # Gegevens opslaan
         echo "EtherDesk Credentials" > credentials.txt
         echo "=====================" >> credentials.txt
         echo "Gebruiker: @$MATRIX_UID:$SERVER_NAME" >> credentials.txt
@@ -164,7 +197,7 @@ if [ -z "$CURRENT_TOKEN" ] || [ ${#CURRENT_TOKEN} -lt 10 ]; then
         echo " -> Dashboard herstarten..."
         docker compose restart dashboard
     else
-        echo -e "${RED} -> FOUT: Kon geen token krijgen. Check logs.${NC}"
+        echo -e "${RED} -> FOUT: Kon geen token krijgen.${NC}"
         echo "Antwoord: $JSON"
     fi
 else
@@ -173,6 +206,6 @@ fi
 
 echo ""
 echo -e "${GREEN}INSTALLATIE VOLTOOID! 🚀${NC}"
-echo "Je inloggegevens zijn opgeslagen in: credentials.txt"
+echo "Je inloggegevens staan in: credentials.txt"
 IP=$(hostname -I | awk '{print $1}')
 echo "Ga naar: http://$IP"
