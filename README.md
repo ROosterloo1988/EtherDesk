@@ -34,7 +34,7 @@ sudo apt update && sudo apt install -y git
 
 # 2. Clone de repository
 # Vervang <JOUW_REPO_URL> met de url van je Github repo
-sudo git clone [https://github.com/ROosterloo1988/EtherDesk.git](https://github.com/ROosterloo1988/EtherDesk.git) /opt/etherdesk
+sudo git clone https://github.com/ROosterloo1988/EtherDesk.git /opt/etherdesk
 
 # 3. Start de Automatische Installer
 cd /opt/etherdesk
