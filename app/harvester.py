@@ -83,16 +83,16 @@ while True:
             continue
 
     if os.path.exists(CMD_FILE_WA):
-        log("COMMAND: LOGIN QR WhatsApp")
+        log("COMMAND: LOGIN WhatsApp")
         try:
             os.remove(CMD_FILE_WA)
             if not wa_room: wa_room = create_dm(token, user, "whatsappbot")
             
             if wa_room:
-                # 1. Resetten voor de zekerheid
+                # 1. Resetten
                 log(f"Stuur 'logout' naar {wa_room}")
                 send_message(token, wa_room, "logout")
-                time.sleep(1)
+                time.sleep(2)
                 
                 # 2. HET JUISTE COMMANDO
                 log(f"Stuur 'login qr' naar {wa_room}")
@@ -101,7 +101,7 @@ while True:
                 found_qr = False
                 
                 # 3. Luisteren
-                for _ in range(20): 
+                for _ in range(25): 
                     try:
                         sync_url = f"{HOMESERVER}/_matrix/client/r0/sync?timeout=2000&since={next_batch}"
                         r = requests.get(sync_url, headers={"Authorization": f"Bearer {token}"})
@@ -129,4 +129,21 @@ while True:
                                     body = content.get('body', '')
                                     log(f"Bot zegt: {body}")
                                     
-                                    # Als hij zegt 'Already logged in',
+                                    if "Already logged in" in body:
+                                        log("Al ingelogd!")
+                                        found_qr = True
+                                        break
+                                        
+                    except Exception as e: log(f"Sync fout: {e}")
+                    
+                    if found_qr or os.path.exists(f"{STATIC_DIR}/qr_whatsapp.png"):
+                        break
+                    time.sleep(1)
+                        
+        except Exception as e: log(f"Fout in WA flow: {e}")
+
+    if os.path.exists(CMD_FILE_SMS):
+        try: os.remove(CMD_FILE_SMS)
+        except: pass
+
+    time.sleep(1)
