@@ -4,7 +4,6 @@ import sys
 import requests
 import json
 
-# --- CONFIGURATIE ---
 CMD_FILE_WA = "/data/cmd_whatsapp.txt"
 CMD_FILE_SMS = "/data/cmd_gmessages.txt"
 STATIC_DIR = "/app/static"
@@ -38,8 +37,7 @@ def create_dm(token, user_id, bridge_suffix):
         data = {"invite": [bot_id], "is_direct": True, "preset": "trusted_private_chat"}
         resp = requests.post(url, headers=headers, json=data)
         if resp.status_code == 200: return resp.json()['room_id']
-    except Exception as e: log(f"Fout bij create_dm: {e}")
-    return None
+    except Exception: return None # Fail silently/retry
 
 def send_message(token, room_id, text):
     url = f"{HOMESERVER}/_matrix/client/r0/rooms/{room_id}/send/m.room.message/{int(time.time())}"
@@ -58,7 +56,7 @@ def download_mxc(token, mxc_url, filename):
                 f.write(r.content)
             log(f"SUCCESS: QR code opgeslagen als {filename}")
             return True
-    except Exception as e: log(f"Download exceptie: {e}")
+    except Exception: pass
     return False
 
 # --- MAIN LOOP ---
@@ -79,28 +77,23 @@ while True:
                 next_batch = r.json().get('next_batch')
             except: pass
         else:
-            time.sleep(5)
+            time.sleep(2)
             continue
 
     if os.path.exists(CMD_FILE_WA):
-        log("COMMAND: LOGIN WhatsApp")
+        log("COMMAND: LOGIN QR WhatsApp")
         try:
             os.remove(CMD_FILE_WA)
             if not wa_room: wa_room = create_dm(token, user, "whatsappbot")
             
             if wa_room:
-                # 1. Resetten
                 log(f"Stuur 'logout' naar {wa_room}")
                 send_message(token, wa_room, "logout")
-                time.sleep(2)
-                
-                # 2. HET JUISTE COMMANDO
+                time.sleep(1)
                 log(f"Stuur 'login qr' naar {wa_room}")
                 send_message(token, wa_room, "login qr")
                 
                 found_qr = False
-                
-                # 3. Luisteren
                 for _ in range(25): 
                     try:
                         sync_url = f"{HOMESERVER}/_matrix/client/r0/sync?timeout=2000&since={next_batch}"
@@ -112,38 +105,23 @@ while True:
                         if wa_room in rooms:
                             events = rooms[wa_room].get('timeline', {}).get('events', [])
                             for e in events:
-                                sender = e.get('sender')
                                 content = e.get('content', {})
-                                if sender == user: continue 
+                                if e.get('sender') == user: continue 
 
-                                # QR Code gevonden?
                                 if content.get('msgtype') == 'm.image':
-                                    mxc = content.get('url')
-                                    log(f"Plaatje ontvangen! URL: {mxc}")
-                                    if download_mxc(token, mxc, "qr_whatsapp.png"):
+                                    if download_mxc(token, content.get('url'), "qr_whatsapp.png"):
                                         found_qr = True
                                         break 
                                 
-                                # Tekst reacties
-                                if content.get('msgtype') == 'm.text':
-                                    body = content.get('body', '')
-                                    log(f"Bot zegt: {body}")
-                                    
-                                    if "Already logged in" in body:
-                                        log("Al ingelogd!")
-                                        found_qr = True
-                                        break
-                                        
-                    except Exception as e: log(f"Sync fout: {e}")
+                                if "Already logged in" in content.get('body', ''):
+                                    found_qr = True; break
+                    except Exception: pass
                     
-                    if found_qr or os.path.exists(f"{STATIC_DIR}/qr_whatsapp.png"):
-                        break
+                    if found_qr or os.path.exists(f"{STATIC_DIR}/qr_whatsapp.png"): break
                     time.sleep(1)
-                        
-        except Exception as e: log(f"Fout in WA flow: {e}")
+        except Exception as e: log(f"Fout: {e}")
 
     if os.path.exists(CMD_FILE_SMS):
         try: os.remove(CMD_FILE_SMS)
         except: pass
-
     time.sleep(1)
