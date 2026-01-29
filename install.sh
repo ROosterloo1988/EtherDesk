@@ -1,211 +1,148 @@
 #!/bin/bash
 
-# Kleuren
+# --- CONFIGURATIE ---
+INSTALL_DIR="/opt/etherdesk"
+DATA_DIR="$INSTALL_DIR/data"
+WA_DIR="$DATA_DIR/whatsapp"
+SYNAPSE_DIR="$DATA_DIR/synapse"
+APP_DIR="$INSTALL_DIR/app"
+
+# Kleurtjes
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BLUE}#########################################${NC}"
-echo -e "${BLUE}#     ETHERDESK AUTO-INSTALLER V5.1     #${NC}"
-echo -e "${BLUE}#     VM & Permission Fix Edition       #${NC}"
-echo -e "${BLUE}#########################################${NC}"
-echo ""
+echo -e "${BLUE}=== ETHERDESK DEFINITIVE INSTALLER ===${NC}"
 
-# --- 1. CHECKS & DEPENDENCIES ---
-echo -e "${BLUE}[1/7] Systeem checks...${NC}"
-check_install() {
-    if ! [ -x "$(command -v $1)" ]; then
-        echo " -> Installing $1..."
-        sudo apt-get update > /dev/null
-        sudo apt-get install -y $1 > /dev/null
-    fi
-}
-check_install curl
-check_install git
-check_install nano
-check_install python3
-# FIX: Haveged zorgt voor entropie in VM's zodat Synapse niet blijft hangen
-check_install haveged 
-
-if ! [ -x "$(command -v docker)" ]; then
-    echo -e "${RED} -> Docker installeren...${NC}"
-    curl -fsSL https://get.docker.com | sh
-    sudo usermod -aG docker $USER
+# 1. Docker Check
+if ! command -v docker &> /dev/null; then
+    echo "Docker installeren..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    rm get-docker.sh
 fi
 
-# --- 2. INPUT GEBRUIKER ---
-echo -e "${BLUE}[2/7] Gegevens invoeren...${NC}"
+# 2. Alles stoppen en opschonen (zodat we vers beginnen)
+echo "Oude containers stoppen..."
+cd $INSTALL_DIR
+docker compose down > /dev/null 2>&1
 
-# .env voorbereiden
-if [ ! -f .env ]; then cp .env.example .env; fi
-get_env() { grep "$1" .env | cut -d '=' -f2 | tr -d '"'; }
+# 3. Mappen & Rechten (De botte bijl methode: alles mag alles)
+echo "Mappen en rechten herstellen..."
+mkdir -p $APP_DIR/templates $APP_DIR/static
+mkdir -p $WA_DIR $SYNAPSE_DIR
 
-# 1. Studio Naam
-CURRENT_NAME=$(get_env STUDIO_NAME)
-if [ "$CURRENT_NAME" == "EtherDesk Studio" ] || [ -z "$CURRENT_NAME" ]; then
-    read -p "Studio Naam [Radio Capri]: " INPUT_NAME
-    INPUT_NAME=${INPUT_NAME:-Radio Capri}
-    sed -i "s/STUDIO_NAME=.*/STUDIO_NAME=\"$INPUT_NAME\"/" .env
-    
-    read -p "Slogan [Vanuit Bentelo!]: " INPUT_SLOGAN
-    INPUT_SLOGAN=${INPUT_SLOGAN:-Vanuit Bentelo!}
-    sed -i "s/SLOGAN=.*/SLOGAN=\"$INPUT_SLOGAN\"/" .env
+# Database file alvast aanmaken om crashes te voorkomen
+touch $WA_DIR/whatsapp.db
+
+# Rechten openzetten
+chmod -R 777 $INSTALL_DIR
+chown -R 1000:1000 $DATA_DIR
+
+# 4. WhatsApp Configureren (De werkende config forceren)
+echo "WhatsApp Config schrijven..."
+cat > $WA_DIR/config.yaml <<EOF
+homeserver:
+    address: http://synapse:8008
+    domain: my.local.matrix
+    verify_ssl: false
+appservice:
+    address: http://mautrix-whatsapp:29318
+    hostname: 0.0.0.0
+    port: 29318
+    database:
+        type: sqlite3-fk-wal
+        uri: file:whatsapp.db?_txlock=immediate
+    id: whatsapp
+    bot:
+        username: whatsappbot
+        displayname: WhatsApp bridge bot
+    ephemeral_events: false
+    as_token: "DitWordtOverschreven"
+    hs_token: "DitWordtOverschreven"
+bridge:
+    username_template: whatsapp_{{.}}
+    displayname_template: "{{if .NotifyName}}{{.NotifyName}}{{else}}{{.Jid}}{{end}} (WA)"
+    history_sync:
+        backfill: true
+        request_full_sync: true 
+    private_chat_portal_meta: true
+    encryption:
+        allow: true
+        default: true
+        require: true
+        appservice: false
+        allow_key_sharing: true
+permissions:
+    "*": "relay"
+    "my.local.matrix": "admin"
+    "@etherdesk:my.local.matrix": "admin"
+logging:
+    min_level: info
+    writers:
+    - type: stdout
+      format: pretty-colored
+EOF
+
+# 5. Synapse Configureren
+if [ ! -f "$SYNAPSE_DIR/homeserver.yaml" ]; then
+    echo "Synapse config genereren..."
+    docker run --rm -v "$SYNAPSE_DIR:/data" -e SYNAPSE_SERVER_NAME=my.local.matrix -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
+    # Registratie aanzetten
+    sed -i 's/enable_registration: false/enable_registration: true/g' $SYNAPSE_DIR/homeserver.yaml
 fi
 
-# 2. Gebruikersnaam & Wachtwoord
-echo ""
-echo "-------------------------------------------------------"
-echo " Kies je inloggegevens voor het Matrix netwerk."
-echo "-------------------------------------------------------"
-read -p "Gebruikersnaam [etherdesk]: " INPUT_USER
-MATRIX_UID=${INPUT_USER:-etherdesk}
+# 6. Docker Compose updaten
+echo "Docker Compose updaten..."
+cat > $INSTALL_DIR/docker-compose.yml <<EOF
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: unless-stopped
+    ports:
+      - 8008:8008
+    volumes:
+      - ./data/synapse:/data
 
-# Wachtwoord vragen (masked input)
-while true; do
-    read -s -p "Wachtwoord [laat leeg voor random]: " INPUT_PW
-    echo ""
-    if [ -z "$INPUT_PW" ]; then
-        MATRIX_PW=$(date +%s | sha256sum | base64 | head -c 16)
-        echo " -> Random wachtwoord gegenereerd."
-        break
-    else
-        if [ ${#INPUT_PW} -ge 8 ]; then
-            MATRIX_PW=$INPUT_PW
-            break
-        else
-            echo -e "${RED} -> Wachtwoord te kort! Minimaal 8 tekens.${NC}"
-        fi
-    fi
-done
+  mautrix-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/whatsapp:/data
+    depends_on:
+      - synapse
 
-SERVER_NAME=$(get_env SERVER_NAME || echo "my.local.matrix")
+  dashboard:
+    build: ./app
+    restart: unless-stopped
+    ports:
+      - 80:80
+    volumes:
+      - ./app:/app
+      - ./data:/data
+    environment:
+      - MATRIX_HOMESERVER=http://synapse:8008
+    depends_on:
+      - synapse
+      - mautrix-whatsapp
+EOF
 
-# Update .env met de nieuwe username
-sed -i "s/MATRIX_USER=.*/MATRIX_USER=@$MATRIX_UID:$SERVER_NAME/" .env
+# 7. Sleutels Genereren (De cruciale stap)
+echo "Sleutels genereren..."
+# We gebruiken de docker-compose file om de tool te draaien, zodat de volumes kloppen
+docker compose run --rm mautrix-whatsapp /usr/bin/python3 -m mautrix_whatsapp -g -c /data/config.yaml -r /data/registration.yaml > /dev/null 2>&1
 
-# --- 3. MAPPEN & RECHTEN ---
-echo -e "${BLUE}[3/7] Mappenstructuur...${NC}"
-mkdir -p data/postgres data/synapse data/dashboard data/whatsapp data/gmessages app/static
-chmod +x app/start.sh 2>/dev/null
-# FIX: Zorg dat iedereen in data mag schrijven (voorkomt permission errors)
-chmod -R 777 data app/static
+# URL Fixen (dit ging steeds mis, nu doen we het hardcoded)
+sed -i 's|url: http://localhost:29318|url: http://mautrix-whatsapp:29318|g' $WA_DIR/registration.yaml
 
-# --- 4. PREP CONFIGS ---
-echo -e "${BLUE}[4/7] Matrix & Bridges voorbereiden...${NC}"
+# Kopiëren naar Synapse
+cp $WA_DIR/registration.yaml $SYNAPSE_DIR/whatsapp-registration.yaml
+chmod 644 $SYNAPSE_DIR/whatsapp-registration.yaml
 
-# Synapse Config Genereren
-if [ ! -f data/synapse/homeserver.yaml ]; then
-    echo " -> Synapse config genereren..."
-    docker run --rm -v $(pwd)/data/synapse:/data -e SYNAPSE_SERVER_NAME=$SERVER_NAME -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
-    sed -i 's/enable_registration: false/enable_registration: true/' data/synapse/homeserver.yaml
-    # FIX: Rechten direct herstellen na generatie
-    chmod 666 data/synapse/homeserver.yaml
-fi
-
-# Bridges Configureren
-configure_bridge() {
-    SERVICE=$1
-    DIR="data/$1"
-    
-    echo " -> Configureren $SERVICE..."
-    
-    if [ ! -f $DIR/config.yaml ]; then
-        # 1. Config genereren
-        docker run --rm -v $(pwd)/$DIR:/data dock.mau.dev/mautrix/$1:latest > /dev/null 2>&1
-        
-        # 2. Config patchen
-        sed -i 's|address: http://localhost:8008|address: http://synapse:8008|g' $DIR/config.yaml
-        sed -i "s|domain: example.com|domain: $SERVER_NAME|g" $DIR/config.yaml
-        sed -i "s|\"example.com\": \"user\"|\"$SERVER_NAME\": \"admin\"\n  \"@$MATRIX_UID:$SERVER_NAME\": \"admin\"|g" $DIR/config.yaml
-        
-        # 3. Registratie genereren
-        docker run --rm -v $(pwd)/$DIR:/data dock.mau.dev/mautrix/$1:latest /usr/bin/mautrix-$1 -g -c /data/config.yaml -r /data/registration.yaml
-        
-        # 4. Kopiëren naar Synapse map
-        cp $DIR/registration.yaml data/synapse/$SERVICE-registration.yaml
-        
-        # FIX: Rechten herstellen zodat Synapse (user 991) het mag lezen
-        chmod 644 data/synapse/$SERVICE-registration.yaml
-        
-        # 5. Koppelen in homeserver.yaml (MET WITREGEL FIX)
-        if ! grep -q "$SERVICE-registration.yaml" data/synapse/homeserver.yaml; then
-            # Als de header nog niet bestaat, voeg die toe mét een witregel ervoor
-            if ! grep -q "app_service_config_files:" data/synapse/homeserver.yaml; then
-                 echo "" >> data/synapse/homeserver.yaml
-                 echo "app_service_config_files:" >> data/synapse/homeserver.yaml
-            fi
-            echo "  - /data/$SERVICE-registration.yaml" >> data/synapse/homeserver.yaml
-        fi
-    fi
-}
-
-configure_bridge "whatsapp"
-configure_bridge "gmessages"
-
-# Nog één keer rechten fixen voor de zekerheid
-chmod -R 777 data
-
-# --- 5. STARTEN ---
-echo -e "${BLUE}[5/7] Containers Starten...${NC}"
-if groups | grep -q "docker"; then docker compose up -d --build; else sudo docker compose up -d --build; fi
-
-# --- 6. PROVISIONING ---
-echo -e "${BLUE}[6/7] Account aanmaken...${NC}"
-
-# Check of token al bestaat
-CURRENT_TOKEN=$(grep "MATRIX_TOKEN=" .env | cut -d '=' -f2)
-if [ -z "$CURRENT_TOKEN" ] || [ ${#CURRENT_TOKEN} -lt 10 ]; then
-    echo " -> Wachten op Synapse (Max 120s)..."
-    
-    # Loop met timeout teller
-    COUNTER=0
-    until curl -s -f -o /dev/null "http://localhost:8008/_matrix/static/"; do
-        sleep 5
-        echo -n "."
-        COUNTER=$((COUNTER+1))
-        # Timeout na 2 minuten
-        if [ $COUNTER -gt 24 ]; then
-            echo ""
-            echo -e "${RED}ERROR: Synapse start niet op tijd op.${NC}"
-            echo "Check logs met: docker compose logs synapse"
-            exit 1
-        fi
-    done
-    echo " Online!"
-
-    echo " -> Gebruiker '$MATRIX_UID' registreren..."
-    # FIX: Check of user al bestaat, anders error negeren
-    docker exec etherdesk-synapse-1 register_new_matrix_user -u "$MATRIX_UID" -p "$MATRIX_PW" -c /data/homeserver.yaml --admin 2>/dev/null || true
-    
-    echo " -> Token ophalen..."
-    JSON=$(curl -s -XPOST -d "{\"type\":\"m.login.password\", \"user\":\"@$MATRIX_UID:$SERVER_NAME\", \"password\":\"$MATRIX_PW\"}" "http://localhost:8008/_matrix/client/r0/login")
-    TOKEN=$(echo $JSON | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', 'ERROR'))")
-    
-    if [ "$TOKEN" != "ERROR" ] && [ "$TOKEN" != "None" ]; then
-        echo -e "${GREEN} -> Token ontvangen!${NC}"
-        if grep -q "MATRIX_TOKEN=" .env; then sed -i "s|MATRIX_TOKEN=.*|MATRIX_TOKEN=$TOKEN|" .env; else echo "MATRIX_TOKEN=$TOKEN" >> .env; fi
-        
-        # Gegevens opslaan
-        echo "EtherDesk Credentials" > credentials.txt
-        echo "=====================" >> credentials.txt
-        echo "Gebruiker: @$MATRIX_UID:$SERVER_NAME" >> credentials.txt
-        echo "Wachtwoord: $MATRIX_PW" >> credentials.txt
-        echo "Token: $TOKEN" >> credentials.txt
-        chmod 600 credentials.txt
-        
-        echo " -> Dashboard herstarten..."
-        docker compose restart dashboard
-    else
-        echo -e "${RED} -> FOUT: Kon geen token krijgen.${NC}"
-        echo "Antwoord: $JSON"
-    fi
-else
-    echo -e "${GREEN} -> Reeds geconfigureerd.${NC}"
-fi
+# 8. Starten
+echo -e "${GREEN}Configuratie gereed. Starten...${NC}"
+docker compose up -d --build
 
 echo ""
-echo -e "${GREEN}INSTALLATIE VOLTOOID! 🚀${NC}"
-echo "Je inloggegevens staan in: credentials.txt"
-IP=$(hostname -I | awk '{print $1}')
-echo "Ga naar: http://$IP"
+echo -e "${GREEN}KLAAR! Wacht 30 seconden en ga naar het dashboard.${NC}"
