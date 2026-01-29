@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# --- CONFIGURATIE ---
+# --- ETHERDESK SYSTEM PREP ---
+# Dit script bereidt de server voor, maar laat de user-aanmaak over aan de Web Interface.
+
 INSTALL_DIR="/opt/etherdesk"
 DATA_DIR="$INSTALL_DIR/data"
 WA_DIR="$DATA_DIR/whatsapp"
@@ -8,46 +10,29 @@ SYNAPSE_DIR="$DATA_DIR/synapse"
 APP_DIR="$INSTALL_DIR/app"
 SERVER_NAME="my.local.matrix"
 
-# Kleurtjes
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== ETHERDESK SYSTEM INSTALLER ===${NC}"
-echo "Dit script bereidt de server voor zodat de klant de setup kan doen."
+echo -e "${BLUE}=== ETHERDESK SYSTEM PREPARATION ===${NC}"
 
-# 1. Docker Check
-if ! command -v docker &> /dev/null; then
-    echo "Docker installeren..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
-fi
-
-# 2. Schoon Schip
-echo "Omgeving voorbereiden..."
+# 1. Schoon Schip (Container stop & verwijder oude data)
+# LET OP: We gooien de database weg zodat de klant echt vers begint!
 cd $INSTALL_DIR
 docker compose down > /dev/null 2>&1
+rm -rf $SYNAPSE_DIR/homeserver.db 
+rm -rf $SYNAPSE_DIR/homeserver.yaml
+# We behouden de whatsapp mappen even niet, vers start is beter voor setup
+rm -rf $WA_DIR
 
-# Mappen structuur
+echo "Mappen aanmaken..."
 mkdir -p $APP_DIR/templates $APP_DIR/static
 mkdir -p $WA_DIR $SYNAPSE_DIR
 
-# CRUCIAAL: Zorg dat de lege database file bestaat om crashes te voorkomen
-touch $WA_DIR/whatsapp.db
+# 2. Configuraties
+echo "Configs schrijven..."
 
-# CRUCIAAL: Lege .env aanmaken en beschrijfbaar maken voor de web-setup
-if [ ! -f $APP_DIR/.env ]; then touch $APP_DIR/.env; fi
-chmod 666 $APP_DIR/.env
-
-# Rechten openzetten (zodat Synapse en de Web App overal bij kunnen)
-chmod -R 777 $INSTALL_DIR
-chown -R 1000:1000 $DATA_DIR
-
-# 3. Configuraties Schrijven (De technische fixes)
-# We schrijven hier de werkende configs, zodat de klant geen technische errors krijgt.
-
-echo "WhatsApp Configureren..."
+# A. WhatsApp Config (Hardcoded Fixes)
 cat > $WA_DIR/config.yaml <<EOF
 homeserver:
     address: http://synapse:8008
@@ -91,71 +76,53 @@ logging:
       format: pretty-colored
 EOF
 
-# 4. Synapse Configureren
-# We moeten zorgen dat 'registration' aan staat, anders werkt de web-setup niet!
-if [ ! -f "$SYNAPSE_DIR/homeserver.yaml" ]; then
-    echo "Synapse config genereren..."
-    docker run --rm -v "$SYNAPSE_DIR:/data" -e SYNAPSE_SERVER_NAME=$SERVER_NAME -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
-    
-    # BELANGRIJK: Zet registratie AAN zodat de web-app een user kan maken
-    sed -i 's/enable_registration: false/enable_registration: true/g' $SYNAPSE_DIR/homeserver.yaml
-fi
+# B. Synapse Config Genereren
+# We doen dit tijdelijk even met een run command
+echo "Synapse config genereren..."
+docker run --rm -v "$SYNAPSE_DIR:/data" -e SYNAPSE_SERVER_NAME=$SERVER_NAME -e SYNAPSE_REPORT_STATS=no matrixdotorg/synapse:latest generate
 
-# 5. Docker Compose
-echo "Docker Compose updaten..."
+# C. CRUCIAAL VOOR KLANT SETUP: REGISTRATIE AANZETTEN!
+# Zonder dit kan de website geen user aanmaken.
+sed -i 's/enable_registration: false/enable_registration: true/g' $SYNAPSE_DIR/homeserver.yaml
+
+# 3. Rechten & Files
+touch $WA_DIR/whatsapp.db
+# Zorg dat de Web App in .env mag schrijven
+if [ ! -f $APP_DIR/.env ]; then touch $APP_DIR/.env; fi
+chmod 666 $APP_DIR/.env
+chmod -R 777 $INSTALL_DIR
+
+# 4. Sleutels Genereren (Koppeling Bridge <-> Synapse)
+# We maken een tijdelijke compose file voor de key generation
 cat > $INSTALL_DIR/docker-compose.yml <<EOF
 services:
   synapse:
     image: matrixdotorg/synapse:latest
-    container_name: synapse
-    restart: unless-stopped
-    ports:
-      - 8008:8008
-    volumes:
-      - ./data/synapse:/data
-
+    ports: [8008:8008]
+    volumes: [./data/synapse:/data]
   mautrix-whatsapp:
     image: dock.mau.dev/mautrix/whatsapp:latest
-    restart: unless-stopped
-    volumes:
-      - ./data/whatsapp:/data
-    depends_on:
-      - synapse
-
+    volumes: [./data/whatsapp:/data]
   dashboard:
     build: ./app
-    restart: unless-stopped
-    ports:
-      - 80:80
-    volumes:
-      - ./app:/app
-      - ./data:/data
-    environment:
-      - MATRIX_HOMESERVER=http://synapse:8008
-    depends_on:
-      - synapse
-      - mautrix-whatsapp
+    ports: [80:80]
+    volumes: [./app:/app, ./data:/data]
+    environment: [MATRIX_HOMESERVER=http://synapse:8008]
 EOF
 
-# 6. Sleutels Genereren (De technische koppeling)
 echo "Sleutels genereren..."
 docker compose run --rm mautrix-whatsapp /usr/bin/python3 -m mautrix_whatsapp -g -c /data/config.yaml -r /data/registration.yaml > /dev/null 2>&1
 
-# URL Fixen
+# URL Fixen & Kopiëren
 sed -i 's|url: http://localhost:29318|url: http://mautrix-whatsapp:29318|g' $WA_DIR/registration.yaml
-
-# Kopiëren naar Synapse
 cp $WA_DIR/registration.yaml $SYNAPSE_DIR/whatsapp-registration.yaml
 chmod 644 $SYNAPSE_DIR/whatsapp-registration.yaml
 
-# 7. Starten
+# 5. Starten
 echo -e "${GREEN}Configuratie gereed. Starten...${NC}"
 docker compose up -d --build
 
 echo ""
-echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}   SYSTEEM GEREED VOOR KLANT SETUP 🚀    ${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo "1. Het systeem draait."
-echo "2. De klant kan nu naar http://<IP-ADRES> gaan."
-echo "3. Daar verschijnt het setup scherm voor Naam, Slogan en Account."
+echo -e "${GREEN}KLAAR!${NC}"
+echo "De server is schoon en Synapse staat open voor registratie."
+echo "Ga naar http://<JOUW-IP> om de Setup te starten."
